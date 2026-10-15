@@ -217,6 +217,76 @@ public sealed class BinarySearchToolTests
     }
 
     [Fact]
+    public async Task ReportsAnEmptyFile()
+    {
+        using var files = new TemporaryFiles();
+        var path = files.Write("empty.bin", []);
+
+        var output = await new BinarySearchTool().InvokeAsync(
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "aa" })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Equal($"{path}: 0 bytes (empty file)", output.Text);
+    }
+
+    [Fact]
+    public async Task BoundsTheResultAndNotesWhereToContinue()
+    {
+        using var files = new TemporaryFiles();
+        var bytes = new byte[1000 * 100];
+        for (var index = 0; index < 1000; index++)
+        {
+            bytes[index * 100] = 0xAA;
+        }
+
+        var path = files.Write("many-context.bin", bytes);
+
+        var output = await new BinarySearchTool().InvokeAsync(
+            new ToolCall(
+                "1",
+                "binsearch",
+                JsonSerializer.Serialize(new { path, pattern = "aa", limit = 1000, context = 64 })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.True(output.Text.Length < 100_000, "The host truncates at 100,000 characters.");
+        var lines = output.Text.Split('\n');
+        var tokens = lines[^1].TrimStart('[').TrimEnd(']').Split(' ');
+        Assert.Equal("showing", tokens[0]);
+        Assert.Equal("matches;", tokens[2]);
+        var shown = int.Parse(tokens[1]);
+        var continueAt = long.Parse(tokens[^1]);
+        Assert.InRange(shown, 1, 999);
+        Assert.Equal((100L * (shown - 1)) + 1, continueAt);
+        var matchLines = lines
+            .Where(line => line.StartsWith("offset ", StringComparison.Ordinal))
+            .ToArray();
+        Assert.Equal(shown, matchLines.Length);
+
+        var total = shown;
+        var offset = continueAt;
+        while (true)
+        {
+            var page = await new BinarySearchTool().InvokeAsync(
+                new ToolCall(
+                    "1",
+                    "binsearch",
+                    JsonSerializer.Serialize(
+                        new { path, pattern = "aa", limit = 1000, context = 64, offset })));
+            Assert.Equal(ToolResultStatus.Success, page.Status);
+            var pageLines = page.Text.Split('\n');
+            total += pageLines.Count(line => line.StartsWith("offset ", StringComparison.Ordinal));
+            if (!pageLines[^1].StartsWith("[showing ", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            offset = long.Parse(pageLines[^1].TrimStart('[').TrimEnd(']').Split(' ')[^1]);
+        }
+
+        Assert.Equal(1000, total);
+    }
+
+    [Fact]
     public async Task RejectsAnOddNumberOfHexDigits()
     {
         using var files = new TemporaryFiles();

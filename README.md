@@ -70,7 +70,7 @@ The digest is lowercase hex. With `expected`, the result adds `expected:` and `m
 | `limit` | 100 (1–1000) | Maximum matches to return |
 | `context` | 0 (0–64) | Bytes to show before and after each match |
 
-Each match is one `offset <byte offset>: <matched bytes>` line, followed by `  before:` and `  after:` lines when `context` is set. Overlapping matches are reported. The pattern is at most 256 bytes. No matches answers `No matches.`.
+Each match is one `offset <byte offset>: <matched bytes>` line, followed by `  before:` and `  after:` lines when `context` is set. Overlapping matches are reported. The pattern is at most 256 bytes. No matches answers `No matches.`; an empty file answers `<path>: 0 bytes (empty file)`.
 
 ### compare arguments
 
@@ -84,8 +84,8 @@ The result reports both sizes, `identical: yes` or `identical: no`, the first di
 ## Output and limits
 
 - `hexdump` shows 1024 bytes by default and at most 16384 bytes per call; when more bytes remain, the page ends with `[showing <n> of <size> bytes; continue with offset <n>]`.
-- `strings` caps each run's text at 200 characters (a longer run ends with `...`); when the limit stops the scan, the result ends with `[showing <n> runs; continue with offset <n>]`.
-- `binsearch` shows at most 16 bytes of each matched pattern (a longer pattern ends with `...`); when the limit stops the scan, the result ends with `[showing <n> matches; continue with offset <n>]`.
+- `strings` caps each run's text at 200 characters (a longer run ends with `...`) and stops listing at an internal character budget below the host output limit; when the limit or the budget stops the listing, the result ends with `[showing <n> runs; continue with offset <n>]`.
+- `binsearch` shows at most 16 bytes of each matched pattern (a longer pattern ends with `...`) and stops listing at the same internal budget; when the limit or the budget stops the listing, the result ends with `[showing <n> matches; continue with offset <n>]`.
 - `hash` and `compare` stream both files, so size is bounded by the host timeout, not memory.
 - The manifest sets `timeoutSeconds` to 120 for every call, and the host truncates any result that exceeds its own tool-output limit.
 - No tool writes, deletes, moves, or executes anything; the set is read-only.

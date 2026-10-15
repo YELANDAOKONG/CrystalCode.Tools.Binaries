@@ -153,6 +153,21 @@ public sealed class CompareToolTests
     }
 
     [Fact]
+    public async Task ReportsTheSecondFileWhenOnlyItCannotBeRead()
+    {
+        using var files = new TemporaryFiles();
+        var path = files.WriteText("a.bin", "abc");
+        var other = files.WriteText("b.bin", "abc");
+        using var reader = new FileStream(other, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var output = await new CompareTool().InvokeAsync(
+            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other })));
+
+        Assert.Equal(ToolResultStatus.Failure, output.Status);
+        Assert.Equal($"The file could not be read: {other}.", output.Text);
+    }
+
+    [Fact]
     public async Task RejectsADirectoryAsTheSecondFile()
     {
         using var files = new TemporaryFiles();

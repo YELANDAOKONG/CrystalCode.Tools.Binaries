@@ -36,4 +36,8 @@ internal static class BinaryLimits
     public const int MaximumPatternBytes = 256;
 
     public const int MaximumMatchPreviewBytes = 16;
+
+    // Stays below the host's 100,000-character tool-output truncation so a
+    // listed result keeps its trailing continue hint.
+    public const int MaximumResultCharacters = 90_000;
 }

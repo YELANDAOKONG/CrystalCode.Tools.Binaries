@@ -111,6 +111,62 @@ public sealed class StringsToolTests
     }
 
     [Fact]
+    public async Task BoundsTheResultAndNotesWhereToContinue()
+    {
+        using var files = new TemporaryFiles();
+        var bytes = new List<byte>();
+        for (var index = 0; index < 500; index++)
+        {
+            bytes.AddRange(Encoding.ASCII.GetBytes(new string('A', 200)));
+            bytes.Add(0x00);
+        }
+
+        var path = files.Write("long-runs.bin", [.. bytes]);
+
+        var output = await new StringsTool().InvokeAsync(
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, limit = 500 })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.True(output.Text.Length < 100_000, "The host truncates at 100,000 characters.");
+        var lines = output.Text.Split('\n');
+        var tokens = lines[^1].TrimStart('[').TrimEnd(']').Split(' ');
+        Assert.Equal("showing", tokens[0]);
+        Assert.Equal("runs;", tokens[2]);
+        var shown = int.Parse(tokens[1]);
+        var continueAt = long.Parse(tokens[^1]);
+        Assert.InRange(shown, 1, 499);
+        Assert.Equal(201L * shown - 1, continueAt);
+        var runLines = lines
+            .Where(line => line.StartsWith("offset ", StringComparison.Ordinal))
+            .ToArray();
+        Assert.Equal(shown, runLines.Length);
+        Assert.StartsWith("offset 0: ", runLines[0], StringComparison.Ordinal);
+        Assert.StartsWith($"offset {(shown - 1) * 201}: ", runLines[^1], StringComparison.Ordinal);
+
+        var total = shown;
+        var offset = continueAt;
+        while (true)
+        {
+            var page = await new StringsTool().InvokeAsync(
+                new ToolCall(
+                    "1",
+                    "strings",
+                    JsonSerializer.Serialize(new { path, limit = 500, offset })));
+            Assert.Equal(ToolResultStatus.Success, page.Status);
+            var pageLines = page.Text.Split('\n');
+            total += pageLines.Count(line => line.StartsWith("offset ", StringComparison.Ordinal));
+            if (!pageLines[^1].StartsWith("[showing ", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            offset = long.Parse(pageLines[^1].TrimStart('[').TrimEnd(']').Split(' ')[^1]);
+        }
+
+        Assert.Equal(500, total);
+    }
+
+    [Fact]
     public async Task ReportsNoRuns()
     {
         using var files = new TemporaryFiles();

@@ -87,64 +87,93 @@ public sealed class CompareTool : ITool
             return BinaryToolResult.Failure(secondError);
         }
 
-        try
+        if (!TryOpenFile(path, out var first, out var firstFailure))
         {
-            await using var first = BinaryFile.Open(path);
-            await using var second = BinaryFile.Open(other);
-            var comparison = await FileCompare
-                .CompareAsync(first, second, cancellationToken)
-                .ConfigureAwait(false);
-            var builder = new StringBuilder();
-            BinaryText.AppendLine(builder, $"{path}: {comparison.FirstBytes} bytes");
-            BinaryText.AppendLine(builder, $"{other}: {comparison.SecondBytes} bytes");
-            BinaryText.AppendLine(builder, comparison.Identical ? "identical: yes" : "identical: no");
-            if (!comparison.Identical)
+            return firstFailure!;
+        }
+
+        await using (first)
+        {
+            if (!TryOpenFile(other, out var second, out var secondFailure))
             {
-                if (comparison.CommonBytes > 0)
-                {
-                    if (comparison.FirstDifferenceOffset >= 0)
-                    {
-                        BinaryText.AppendLine(
-                            builder,
-                            $"first difference: offset {comparison.FirstDifferenceOffset} "
-                            + $"({Hex(comparison.FirstDifferenceValue)} vs "
-                            + $"{Hex(comparison.SecondDifferenceValue)})");
-                    }
-                    else
-                    {
-                        BinaryText.AppendLine(
-                            builder,
-                            $"first difference: none in the first {comparison.CommonBytes} bytes");
-                    }
-
-                    if (comparison.DifferingBytes > 0)
-                    {
-                        BinaryText.AppendLine(
-                            builder,
-                            $"differing bytes: {comparison.DifferingBytes} "
-                            + $"of the first {comparison.CommonBytes} bytes");
-                    }
-                }
-
-                if (comparison.FirstBytes != comparison.SecondBytes)
-                {
-                    var longer = comparison.FirstBytes > comparison.SecondBytes ? path : other;
-                    var delta = Math.Abs(comparison.FirstBytes - comparison.SecondBytes);
-                    BinaryText.AppendLine(
-                        builder,
-                        $"lengths differ: {longer} is {delta} bytes longer");
-                }
+                return secondFailure!;
             }
 
-            return new ToolOutput(BinaryText.Finish(builder));
+            await using (second)
+            {
+                FileComparison comparison;
+                try
+                {
+                    comparison = await FileCompare
+                        .CompareAsync(first, second, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    return BinaryToolResult.Failure(
+                        $"The files could not be read: {path}, {other}.");
+                }
+
+                var builder = new StringBuilder();
+                BinaryText.AppendLine(builder, $"{path}: {comparison.FirstBytes} bytes");
+                BinaryText.AppendLine(builder, $"{other}: {comparison.SecondBytes} bytes");
+                BinaryText.AppendLine(builder, comparison.Identical ? "identical: yes" : "identical: no");
+                if (!comparison.Identical)
+                {
+                    if (comparison.CommonBytes > 0)
+                    {
+                        if (comparison.FirstDifferenceOffset >= 0)
+                        {
+                            BinaryText.AppendLine(
+                                builder,
+                                $"first difference: offset {comparison.FirstDifferenceOffset} "
+                                + $"({Hex(comparison.FirstDifferenceValue)} vs "
+                                + $"{Hex(comparison.SecondDifferenceValue)})");
+                        }
+                        else
+                        {
+                            BinaryText.AppendLine(
+                                builder,
+                                $"first difference: none in the first {comparison.CommonBytes} bytes");
+                        }
+
+                        if (comparison.DifferingBytes > 0)
+                        {
+                            BinaryText.AppendLine(
+                                builder,
+                                $"differing bytes: {comparison.DifferingBytes} "
+                                + $"of the first {comparison.CommonBytes} bytes");
+                        }
+                    }
+
+                    if (comparison.FirstBytes != comparison.SecondBytes)
+                    {
+                        var longer = comparison.FirstBytes > comparison.SecondBytes ? path : other;
+                        var delta = Math.Abs(comparison.FirstBytes - comparison.SecondBytes);
+                        BinaryText.AppendLine(
+                            builder,
+                            $"lengths differ: {longer} is {delta} bytes longer");
+                    }
+                }
+
+                return new ToolOutput(BinaryText.Finish(builder));
+            }
         }
-        catch (OperationCanceledException)
+    }
+
+    private static bool TryOpenFile(string path, out FileStream stream, out ToolOutput? failure)
+    {
+        failure = null;
+        try
         {
-            throw;
+            stream = BinaryFile.Open(path);
+            return true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return BinaryToolResult.Failure($"The file could not be read: {path}.");
+            stream = null!;
+            failure = BinaryToolResult.Failure($"The file could not be read: {path}.");
+            return false;
         }
     }
 

@@ -175,7 +175,7 @@ public sealed class StringsTool : ITool
                 : Math.Min(length.Value, size - offset);
             var probe = new byte[(int)Math.Min(BinaryLimits.ProbeBytes, size)];
             stream.Seek(0, SeekOrigin.Begin);
-            await BinaryFile
+            var probeRead = await BinaryFile
                 .ReadAtMostAsync(stream, probe, cancellationToken)
                 .ConfigureAwait(false);
             stream.Seek(offset, SeekOrigin.Begin);
@@ -185,27 +185,39 @@ public sealed class StringsTool : ITool
 
             var builder = new StringBuilder();
             BinaryText.AppendLine(builder, $"{path}: {size} bytes");
-            BinaryText.AppendLine(builder, $"probe: {TextProbe.Describe(probe)}");
+            BinaryText.AppendLine(builder, $"probe: {TextProbe.Describe(probe.AsSpan(0, probeRead))}");
             if (scan.Runs.Count == 0)
             {
                 BinaryText.AppendLine(builder, "No printable runs found.");
             }
             else
             {
+                var listed = 0;
+                var continueAt = offset;
+                var truncated = false;
                 foreach (var run in scan.Runs)
                 {
                     var text = run.Text.Length > BinaryLimits.MaximumStringCharacters
                         ? run.Text[..BinaryLimits.MaximumStringCharacters] + "..."
                         : run.Text;
-                    BinaryText.AppendLine(builder, $"offset {run.Offset}: {text}");
+                    var line = $"offset {run.Offset}: {text}";
+                    if (listed > 0
+                        && builder.Length + line.Length + 1 > BinaryLimits.MaximumResultCharacters)
+                    {
+                        truncated = true;
+                        break;
+                    }
+
+                    BinaryText.AppendLine(builder, line);
+                    listed++;
+                    continueAt = run.Offset + run.ByteLength;
                 }
 
-                if (scan.More)
+                if (scan.More || truncated)
                 {
-                    var last = scan.Runs[^1];
                     BinaryText.AppendLine(
                         builder,
-                        $"[showing {scan.Runs.Count} runs; continue with offset {last.Offset + last.ByteLength}]");
+                        $"[showing {listed} runs; continue with offset {continueAt}]");
                 }
             }
 

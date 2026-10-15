@@ -126,6 +126,20 @@ public sealed class HexDumpToolTests
     }
 
     [Fact]
+    public async Task ReadsAFileThatAnotherHandleKeepsOpenForWriting()
+    {
+        using var files = new TemporaryFiles();
+        var path = files.WriteText("shared.bin", "hello");
+        using var writer = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Read);
+
+        var output = await new HexDumpTool().InvokeAsync(
+            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Contains("|hello|", output.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RejectsUnknownArguments()
     {
         using var files = new TemporaryFiles();

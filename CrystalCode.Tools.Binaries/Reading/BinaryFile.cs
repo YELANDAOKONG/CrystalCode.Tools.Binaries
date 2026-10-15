@@ -24,12 +24,14 @@ internal static class BinaryFile
         return null;
     }
 
+    // FileShare.ReadWrite so a file that another handle or process keeps open
+    // for writing stays readable; the tool itself only reads.
     public static FileStream Open(string path) =>
         new(path, new FileStreamOptions
         {
             Mode = FileMode.Open,
             Access = FileAccess.Read,
-            Share = FileShare.Read,
+            Share = FileShare.ReadWrite,
             Options = FileOptions.Asynchronous
         });
 

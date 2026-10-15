@@ -170,6 +170,13 @@ public sealed class BinarySearchTool : ITool
         {
             await using var stream = BinaryFile.Open(path);
             var size = stream.Length;
+            if (size == 0)
+            {
+                return offset > 0
+                    ? BinaryToolResult.Failure(PastEnd(path, size, offset))
+                    : new ToolOutput($"{path}: 0 bytes (empty file)");
+            }
+
             if (offset > size)
             {
                 return BinaryToolResult.Failure(PastEnd(path, size, offset));
@@ -199,13 +206,17 @@ public sealed class BinarySearchTool : ITool
                     : hits.Count == 1
                         ? $"1 match for a {pattern.Description}"
                         : $"{hits.Count} matches for a {pattern.Description}");
+            var listed = 0;
+            var continueAt = offset;
+            var truncated = false;
             foreach (var hit in hits)
             {
-                BinaryText.AppendLine(builder, $"offset {hit}: {HexPreview(pattern.Bytes)}");
+                var block = new StringBuilder();
+                BinaryText.AppendLine(block, $"offset {hit}: {HexPreview(pattern.Bytes)}");
                 if (context > 0)
                 {
                     await AppendContextAsync(
-                            builder,
+                            block,
                             stream,
                             size,
                             hit,
@@ -214,13 +225,25 @@ public sealed class BinarySearchTool : ITool
                             cancellationToken)
                         .ConfigureAwait(false);
                 }
+
+                var blockText = BinaryText.Finish(block);
+                if (listed > 0
+                    && builder.Length + blockText.Length + 1 > BinaryLimits.MaximumResultCharacters)
+                {
+                    truncated = true;
+                    break;
+                }
+
+                builder.Append(blockText).Append('\n');
+                listed++;
+                continueAt = hit + 1;
             }
 
-            if (more)
+            if (more || truncated)
             {
                 BinaryText.AppendLine(
                     builder,
-                    $"[showing {hits.Count} matches; continue with offset {hits[^1] + 1}]");
+                    $"[showing {listed} matches; continue with offset {continueAt}]");
             }
 
             return new ToolOutput(BinaryText.Finish(builder));
