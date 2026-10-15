@@ -1,0 +1,21 @@
+{
+  "runner": "dotnet",
+  "assembly": "CrystalCode.Tools.Binaries.dll",
+  "types": [
+    "CrystalCode.Tools.Binaries.Tools.HexDumpTool",
+    "CrystalCode.Tools.Binaries.Tools.StringsTool",
+    "CrystalCode.Tools.Binaries.Tools.HashTool",
+    "CrystalCode.Tools.Binaries.Tools.BinarySearchTool",
+    "CrystalCode.Tools.Binaries.Tools.CompareTool"
+  ],
+  "catalogs": ["plan", "work"],
+  "approval": "always",
+  "timeoutSeconds": 120,
+  "tools": {
+    "hexdump": { "pathArguments": ["path"] },
+    "strings": { "pathArguments": ["path"] },
+    "hash": { "pathArguments": ["path"] },
+    "binsearch": { "pathArguments": ["path"] },
+    "compare": { "pathArguments": ["path", "other"] }
+  }
+}

@@ -1,0 +1,22 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrystalCode.Tools.Binaries", "CrystalCode.Tools.Binaries\CrystalCode.Tools.Binaries.csproj", "{6F5D9EC2-CD6B-4B84-9D18-EBD9371BAB60}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrystalCode.Tools.Binaries.Tests", "CrystalCode.Tools.Binaries.Tests\CrystalCode.Tools.Binaries.Tests.csproj", "{150D0650-AE0A-487E-8214-3E6ED70FC66C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6F5D9EC2-CD6B-4B84-9D18-EBD9371BAB60}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F5D9EC2-CD6B-4B84-9D18-EBD9371BAB60}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F5D9EC2-CD6B-4B84-9D18-EBD9371BAB60}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F5D9EC2-CD6B-4B84-9D18-EBD9371BAB60}.Release|Any CPU.Build.0 = Release|Any CPU
+		{150D0650-AE0A-487E-8214-3E6ED70FC66C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{150D0650-AE0A-487E-8214-3E6ED70FC66C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{150D0650-AE0A-487E-8214-3E6ED70FC66C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{150D0650-AE0A-487E-8214-3E6ED70FC66C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
