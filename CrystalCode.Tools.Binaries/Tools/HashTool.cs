@@ -16,8 +16,8 @@ public sealed class HashTool : ITool
 
     private const string ToolDescription =
         "Computes a file digest and its size. "
-        + "algorithm is sha256 (default), sha512, sha1, or md5; sha1 and md5 exist for matching "
-        + "existing published values. "
+        + "algorithm is sha256 (default), sha384, sha512, sha1, md5, sha3-256, sha3-384, or sha3-512; "
+        + "sha1 and md5 exist for matching existing published values. "
         + "expected optionally gives a hex digest to compare against; the result reports match yes or no. "
         + "Use it to verify a build, download, or artifact identity. "
         + "Paths inside the workspace run without asking. "
@@ -33,7 +33,7 @@ public sealed class HashTool : ITool
             },
             "algorithm": {
               "type": "string",
-              "enum": ["sha256", "sha512", "sha1", "md5"],
+              "enum": ["sha256", "sha384", "sha512", "sha1", "md5", "sha3-256", "sha3-384", "sha3-512"],
               "description": "Digest algorithm (default sha256)."
             },
             "expected": {
@@ -73,7 +73,7 @@ public sealed class HashTool : ITool
                 || !BinaryArguments.TryReadOptionalChoice(
                     root,
                     "algorithm",
-                    ["sha256", "sha512", "sha1", "md5"],
+                    ["sha256", "sha384", "sha512", "sha1", "md5", "sha3-256", "sha3-384", "sha3-512"],
                     out var algorithm,
                     out error)
                 || !BinaryArguments.TryReadOptionalString(root, "expected", out var expected, out error))
@@ -90,7 +90,8 @@ public sealed class HashTool : ITool
             if (!FileHash.TryGetAlgorithm(selected, out var hashAlgorithm))
             {
                 return BinaryToolResult.Failure(
-                    "Argument 'algorithm' must be sha256, sha512, sha1, or md5.");
+                    "Argument 'algorithm' must be 'sha256', 'sha384', 'sha512', 'sha1', 'md5', "
+                    + "'sha3-256', 'sha3-384', or 'sha3-512'.");
             }
 
             try

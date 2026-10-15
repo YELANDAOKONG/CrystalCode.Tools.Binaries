@@ -21,7 +21,7 @@ This is a native dotnet tool set for [Crystal Code](https://github.com/YELANDAOK
 | :--- | :--- |
 | `hexdump` | Shows a bounded byte window of a file as hex and ASCII rows |
 | `strings` | Extracts printable ASCII or UTF-16LE runs with their byte offsets |
-| `hash` | Computes a sha256, sha512, sha1, or md5 digest, optionally compared with an expected value |
+| `hash` | Computes a sha256, sha384, sha512, sha1, md5, sha3-256, sha3-384, or sha3-512 digest, optionally compared with an expected value |
 | `binsearch` | Finds literal byte patterns in a file and returns their offsets |
 | `compare` | Compares two files byte by byte: equality, first difference, and differing bytes |
 
@@ -53,7 +53,7 @@ The first bytes of the file are probed and reported as a `probe:` line (`binary`
 | Argument | Default | Meaning |
 | :--- | :--- | :--- |
 | `path` | Required | Workspace-relative or absolute file path |
-| `algorithm` | `sha256` | `sha256`, `sha512`, `sha1`, or `md5` |
+| `algorithm` | `sha256` | `sha256`, `sha384`, `sha512`, `sha1`, `md5`, `sha3-256`, `sha3-384`, or `sha3-512` |
 | `expected` | None | Optional expected digest in hex |
 
 The digest is lowercase hex. With `expected`, the result adds `expected:` and `match: yes` or `match: no`; a mismatch is a result, not a tool error. `sha1` and `md5` exist for matching existing published values.

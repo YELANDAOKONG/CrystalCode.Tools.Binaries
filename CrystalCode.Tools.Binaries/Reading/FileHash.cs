@@ -14,6 +14,9 @@ internal static class FileHash
             case "sha256":
                 algorithm = HashAlgorithmName.SHA256;
                 return true;
+            case "sha384":
+                algorithm = HashAlgorithmName.SHA384;
+                return true;
             case "sha512":
                 algorithm = HashAlgorithmName.SHA512;
                 return true;
@@ -22,6 +25,15 @@ internal static class FileHash
                 return true;
             case "md5":
                 algorithm = HashAlgorithmName.MD5;
+                return true;
+            case "sha3-256":
+                algorithm = HashAlgorithmName.SHA3_256;
+                return true;
+            case "sha3-384":
+                algorithm = HashAlgorithmName.SHA3_384;
+                return true;
+            case "sha3-512":
+                algorithm = HashAlgorithmName.SHA3_512;
                 return true;
             default:
                 algorithm = default;
