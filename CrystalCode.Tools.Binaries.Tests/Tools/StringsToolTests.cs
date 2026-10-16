@@ -24,6 +24,34 @@ public sealed class StringsToolTests
     }
 
     [Fact]
+    public async Task ExtractsUtf8WithByteAccurateContinuation()
+    {
+        using var files = new TemporaryFiles();
+        var path = files.Write("utf8.bin", Encoding.UTF8.GetBytes("中文测试\0更多文本"));
+        var output = await new StringsTool().InvokeAsync(new ToolCall("1", "strings",
+            JsonSerializer.Serialize(new { path, encoding = "utf8", minimumLength = 4, limit = 1 })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Contains("offset 0: 中文测试", output.Text);
+        Assert.EndsWith("[showing 1 runs; continue with offset 12]", output.Text);
+        var next = await new StringsTool().InvokeAsync(new ToolCall("2", "strings",
+            JsonSerializer.Serialize(new { path, encoding = "utf8", minimumLength = 4, offset = 12 })));
+        Assert.Contains("offset 13: 更多文本", next.Text);
+    }
+
+    [Fact]
+    public async Task Utf8PreviewDoesNotSplitSurrogatePairs()
+    {
+        using var files = new TemporaryFiles();
+        var path = files.Write("utf8.bin", Encoding.UTF8.GetBytes(new string('A', 199) + "😀end"));
+        var output = await new StringsTool().InvokeAsync(new ToolCall("1", "strings",
+            JsonSerializer.Serialize(new { path, encoding = "utf8" })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.EndsWith(new string('A', 199) + "...", output.Text);
+    }
+
+    [Fact]
     public async Task ExtractsAsciiRunsWithOffsets()
     {
         using var files = new TemporaryFiles();
@@ -266,9 +294,9 @@ public sealed class StringsToolTests
         var path = files.WriteText("plain.txt", "plain text");
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, encoding = "utf8" })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, encoding = "utf32" })));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
-        Assert.Equal("Argument 'encoding' must be 'ascii' or 'utf16le'.", output.Text);
+        Assert.Equal("Argument 'encoding' must be 'ascii', 'utf16le', or 'utf8'.", output.Text);
     }
 }

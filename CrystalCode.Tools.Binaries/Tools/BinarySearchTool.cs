@@ -18,6 +18,7 @@ public sealed class BinarySearchTool : ITool
     private const string ToolDescription =
         "Finds literal byte patterns in a file and returns their offsets. "
         + "encoding is 'hex' (default) for a hex string such as '89 50 4E 47', "
+        + "'hex-wildcard' accepts space-separated bytes with '??' for any byte, "
         + "or 'ascii', 'utf8', or 'utf16le' for literal text. "
         + "offset and length bound the scan window in bytes (default: the whole file). "
         + "limit caps matches (1-1000, default 100) and the result notes where to continue. "
@@ -41,8 +42,8 @@ public sealed class BinarySearchTool : ITool
             },
             "encoding": {
               "type": "string",
-              "enum": ["hex", "ascii", "utf8", "utf16le"],
-              "description": "How pattern is interpreted (default hex)."
+              "enum": ["hex", "hex-wildcard", "ascii", "utf8", "utf16le"],
+              "description": "How pattern is interpreted: hex (default), hex-wildcard (space-separated bytes and ??), or literal text encoding."
             },
             "offset": {
               "type": "integer",
@@ -101,7 +102,7 @@ public sealed class BinarySearchTool : ITool
                 || !BinaryArguments.TryReadOptionalChoice(
                     root,
                     "encoding",
-                    ["hex", "ascii", "utf8", "utf16le"],
+                    ["hex", "hex-wildcard", "ascii", "utf8", "utf16le"],
                     out var encoding,
                     out error)
                 || !BinaryArguments.TryReadOptionalInteger(
@@ -189,7 +190,7 @@ public sealed class BinarySearchTool : ITool
                     stream,
                     offset,
                     windowLength,
-                    pattern.Bytes,
+                    pattern,
                     limit,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -213,7 +214,17 @@ public sealed class BinarySearchTool : ITool
             foreach (var hit in hits)
             {
                 var block = new StringBuilder();
-                BinaryText.AppendLine(block, $"offset {hit}: {HexPreview(pattern.Bytes)}");
+                var preview = pattern.Wildcards is null ? HexPreview(pattern.Bytes) : "wildcard match";
+                BinaryText.AppendLine(block, $"offset {hit}: {preview}");
+                if (pattern.Wildcards is not null)
+                {
+                    var matched = new byte[pattern.Bytes.Length];
+                    stream.Seek(hit, SeekOrigin.Begin);
+                    var matchedRead = await BinaryFile.ReadAtMostAsync(stream, matched, cancellationToken)
+                        .ConfigureAwait(false);
+                    BinaryText.AppendLine(block, $"  matched: {HexPreview(matched[..matchedRead])}");
+                }
+
                 if (context > 0)
                 {
                     await AppendContextAsync(
@@ -263,10 +274,11 @@ public sealed class BinarySearchTool : ITool
         Stream stream,
         long windowStart,
         long windowLength,
-        byte[] pattern,
+        BytePattern value,
         int limit,
         CancellationToken cancellationToken)
     {
+        var pattern = value.Bytes;
         var hits = new List<long>();
         var more = false;
         var maxCarry = pattern.Length - 1;
@@ -291,7 +303,7 @@ public sealed class BinarySearchTool : ITool
             var searchFrom = 0;
             while (true)
             {
-                var index = span[searchFrom..].IndexOf(pattern);
+                var index = FindPattern(span[searchFrom..], value);
                 if (index < 0)
                 {
                     break;
@@ -323,6 +335,34 @@ public sealed class BinarySearchTool : ITool
         }
 
         return (hits, more);
+    }
+
+    private static int FindPattern(ReadOnlySpan<byte> span, BytePattern pattern)
+    {
+        if (pattern.Wildcards is null)
+        {
+            return span.IndexOf(pattern.Bytes);
+        }
+
+        for (var start = 0; start <= span.Length - pattern.Bytes.Length; start++)
+        {
+            var matches = true;
+            for (var index = 0; index < pattern.Bytes.Length; index++)
+            {
+                if (!pattern.Wildcards[index] && span[start + index] != pattern.Bytes[index])
+                {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches)
+            {
+                return start;
+            }
+        }
+
+        return -1;
     }
 
     private static async Task AppendContextAsync(

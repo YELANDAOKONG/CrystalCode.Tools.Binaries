@@ -24,6 +24,52 @@ public sealed class BinarySearchToolTests
     }
 
     [Fact]
+    public async Task FindsWildcardPatternsAcrossChunksAndReportsActualBytes()
+    {
+        using var files = new TemporaryFiles();
+        var bytes = new byte[65540];
+        bytes[65535] = 0x48;
+        bytes[65536] = 0xAB;
+        bytes[65537] = 0x89;
+        var path = files.Write("wildcard.bin", bytes);
+        var output = await new BinarySearchTool().InvokeAsync(new ToolCall("1", "binsearch",
+            JsonSerializer.Serialize(new { path, pattern = "48 ?? 89", encoding = "hex-wildcard", context = 1 })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Contains("offset 65535: wildcard match\n  matched: 48 ab 89", output.Text);
+        Assert.Contains("before: 00", output.Text);
+        Assert.Contains("after: 00", output.Text);
+    }
+
+    [Fact]
+    public async Task WildcardsRespectOverlapsWindowsAndPagination()
+    {
+        using var files = new TemporaryFiles();
+        var path = files.Write("wildcard.bin", [1, 2, 3, 4, 5]);
+        var output = await new BinarySearchTool().InvokeAsync(new ToolCall("1", "binsearch",
+            JsonSerializer.Serialize(new { path, pattern = "?? ??", encoding = "hex-wildcard", offset = 1, length = 3, limit = 1 })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Contains("offset 1: wildcard match\n  matched: 02 03", output.Text);
+        Assert.EndsWith("[showing 1 matches; continue with offset 2]", output.Text);
+        var next = await new BinarySearchTool().InvokeAsync(new ToolCall("2", "binsearch",
+            JsonSerializer.Serialize(new { path, pattern = "?? ??", encoding = "hex-wildcard", offset = 2, length = 2 })));
+        Assert.Contains("1 match for", next.Text);
+        Assert.Contains("matched: 03 04", next.Text);
+    }
+
+    [Theory]
+    [InlineData("4? ??")]
+    [InlineData("4889")]
+    [InlineData("GG")]
+    public async Task RejectsInvalidWildcardPatterns(string pattern)
+    {
+        var output = await new BinarySearchTool().InvokeAsync(new ToolCall("1", "binsearch",
+            JsonSerializer.Serialize(new { path = "unused", pattern, encoding = "hex-wildcard" })));
+        Assert.Equal(ToolResultStatus.Failure, output.Status);
+    }
+
+    [Fact]
     public async Task FindsASpacedHexPattern()
     {
         using var files = new TemporaryFiles();

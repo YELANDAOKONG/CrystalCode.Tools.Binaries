@@ -17,7 +17,8 @@ public sealed class StringsTool : ITool
     private const string ToolDescription =
         "Extracts printable text runs from a file with their byte offsets. "
         + "encoding 'ascii' (default) finds printable ASCII runs; 'utf16le' finds UTF-16LE runs, "
-        + "which is what PE and .NET binaries usually contain. "
+        + "which is what PE and .NET binaries usually contain. 'utf8' extracts valid UTF-8 text, "
+        + "counts Unicode scalar values, and splits runs at invalid bytes and control characters. "
         + "minimumLength is the minimum characters per run (4-1024, default 8). "
         + "offset and length bound the scan window in bytes (default: the whole file). "
         + "limit caps returned runs (1-500, default 200) and the result notes where to continue. "
@@ -41,8 +42,8 @@ public sealed class StringsTool : ITool
             },
             "encoding": {
               "type": "string",
-              "enum": ["ascii", "utf16le"],
-              "description": "Run encoding: 'ascii' (default) or 'utf16le'."
+              "enum": ["ascii", "utf16le", "utf8"],
+              "description": "Run encoding: 'ascii' (default), 'utf16le', or strict 'utf8'. UTF-8 minimumLength counts Unicode scalar values."
             },
             "offset": {
               "type": "integer",
@@ -100,7 +101,7 @@ public sealed class StringsTool : ITool
                 || !BinaryArguments.TryReadOptionalChoice(
                     root,
                     "encoding",
-                    ["ascii", "utf16le"],
+                    ["ascii", "utf16le", "utf8"],
                     out var encoding,
                     out error)
                 || !BinaryArguments.TryReadOptionalInteger(
@@ -131,7 +132,7 @@ public sealed class StringsTool : ITool
             return await ScanAsync(
                     path,
                     (int)(minimumLength ?? BinaryLimits.DefaultMinimumStringLength),
-                    string.Equals(encoding, "utf16le", StringComparison.Ordinal),
+                    encoding ?? "ascii",
                     offset ?? 0,
                     length,
                     (int)(limit ?? BinaryLimits.DefaultStringLimit),
@@ -143,7 +144,7 @@ public sealed class StringsTool : ITool
     private static async Task<ToolOutput> ScanAsync(
         string path,
         int minimumLength,
-        bool utf16le,
+        string encoding,
         long offset,
         long? length,
         int limit,
@@ -179,9 +180,11 @@ public sealed class StringsTool : ITool
                 .ReadAtMostAsync(stream, probe, cancellationToken)
                 .ConfigureAwait(false);
             stream.Seek(offset, SeekOrigin.Begin);
-            var scan = await PrintableRuns
-                .ScanAsync(stream, offset, windowLength, minimumLength, utf16le, limit, cancellationToken)
-                .ConfigureAwait(false);
+            var scan = encoding == "utf8"
+                ? await Utf8Runs.ScanAsync(stream, offset, windowLength, minimumLength, limit, cancellationToken)
+                    .ConfigureAwait(false)
+                : await PrintableRuns.ScanAsync(stream, offset, windowLength, minimumLength, encoding == "utf16le", limit, cancellationToken)
+                    .ConfigureAwait(false);
 
             var builder = new StringBuilder();
             BinaryText.AppendLine(builder, $"{path}: {size} bytes");
@@ -197,8 +200,14 @@ public sealed class StringsTool : ITool
                 var truncated = false;
                 foreach (var run in scan.Runs)
                 {
-                    var text = run.Text.Length > BinaryLimits.MaximumStringCharacters
-                        ? run.Text[..BinaryLimits.MaximumStringCharacters] + "..."
+                    var previewLength = Math.Min(run.Text.Length, BinaryLimits.MaximumStringCharacters);
+                    if (previewLength < run.Text.Length && char.IsHighSurrogate(run.Text[previewLength - 1]))
+                    {
+                        previewLength--;
+                    }
+
+                    var text = run.Text.Length > previewLength
+                        ? run.Text[..previewLength] + "..."
                         : run.Text;
                     var line = $"offset {run.Offset}: {text}";
                     if (listed > 0

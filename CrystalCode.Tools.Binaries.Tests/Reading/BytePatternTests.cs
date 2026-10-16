@@ -97,10 +97,17 @@ public sealed class BytePatternTests
     }
 
     [Fact]
+    public void RejectsOversizedAndEmptyWildcardPatterns()
+    {
+        Assert.False(BytePattern.TryParse("hex-wildcard", "   ", out _, out _));
+        Assert.False(BytePattern.TryParse("hex-wildcard", string.Join(' ', Enumerable.Repeat("??", 257)), out _, out _));
+    }
+
+    [Fact]
     public void RejectsAnUnknownEncoding()
     {
         Assert.False(BytePattern.TryParse("yaml", "x", out _, out var error));
 
-        Assert.Equal("Argument 'encoding' must be hex, ascii, utf8, or utf16le.", error);
+        Assert.Equal("Argument 'encoding' must be hex, hex-wildcard, ascii, utf8, or utf16le.", error);
     }
 }

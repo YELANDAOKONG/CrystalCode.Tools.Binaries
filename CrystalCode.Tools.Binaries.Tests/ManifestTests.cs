@@ -21,7 +21,8 @@ public sealed class ManifestTests
                 typeof(StringsTool).FullName!,
                 typeof(HashTool).FullName!,
                 typeof(BinarySearchTool).FullName!,
-                typeof(CompareTool).FullName!
+                typeof(CompareTool).FullName!,
+                typeof(BinaryReadTool).FullName!
             ],
             root.GetProperty("types").EnumerateArray().Select(item => item.GetString()!).ToArray());
         Assert.Equal(
@@ -53,6 +54,7 @@ public sealed class ManifestTests
         Assert.Equal(
             ["path", "other"],
             PathArguments(tools, "compare"));
+        Assert.Equal(["path"], PathArguments(tools, "binread"));
     }
 
     private static string[] PathArguments(JsonElement tools, string name) =>

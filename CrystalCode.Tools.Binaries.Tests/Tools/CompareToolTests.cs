@@ -23,6 +23,76 @@ public sealed class CompareToolTests
     }
 
     [Fact]
+    public async Task ListsRangesAndContinuesWithoutRepeatingThem()
+    {
+        using var files = new TemporaryFiles();
+        var path = files.Write("a.bin", [1, 2, 3, 4, 5]);
+        var other = files.Write("b.bin", [1, 9, 8, 4, 7, 6]);
+        var tool = new CompareTool();
+        var first = await tool.InvokeAsync(new ToolCall("1", "compare",
+            JsonSerializer.Serialize(new { path, other, mode = "ranges", limit = 1 })));
+
+        Assert.Equal(ToolResultStatus.Success, first.Status);
+        Assert.Contains("offset 1: 2 differing bytes\n  first (2 bytes): 0203\n  second (2 bytes): 0908", first.Text);
+        Assert.EndsWith("[showing 1 ranges; continue with offset 3]", first.Text);
+
+        var next = await tool.InvokeAsync(new ToolCall("2", "compare",
+            JsonSerializer.Serialize(new { path, other, mode = "ranges", offset = 3 })));
+        Assert.Contains("offset 4: 2 differing bytes\n  first (1 bytes): 05\n  second (2 bytes): 0706", next.Text);
+        Assert.DoesNotContain("continue with", next.Text);
+    }
+
+    [Fact]
+    public async Task MergesRangesAcrossChunksAndBoundsPreviews()
+    {
+        using var files = new TemporaryFiles();
+        var path = files.Write("a.bin", new byte[131073]);
+        var bytes = new byte[131073];
+        Array.Fill(bytes, (byte)1, 65535, 65537);
+        var other = files.Write("b.bin", bytes);
+        var output = await new CompareTool().InvokeAsync(new ToolCall("1", "compare",
+            JsonSerializer.Serialize(new { path, other, mode = "ranges" })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Contains("offset 65535: 65537 differing bytes", output.Text);
+        Assert.Contains(" ...", output.Text);
+        Assert.True(output.Text.Length < 1000);
+    }
+
+    [Theory]
+    [InlineData(0, 1, "No differences")]
+    [InlineData(1, 1, "offset 1: 1 differing bytes")]
+    [InlineData(2, long.MaxValue, "offset 2: 2 differing bytes")]
+    public async Task BoundsRangeWindows(long offset, long length, string expected)
+    {
+        using var files = new TemporaryFiles();
+        var path = files.Write("a.bin", [1, 2]);
+        var other = files.Write("b.bin", [1, 3, 4, 5]);
+        var output = await new CompareTool().InvokeAsync(new ToolCall("1", "compare",
+            JsonSerializer.Serialize(new { path, other, mode = "ranges", offset, length })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Contains(expected, output.Text);
+        if (offset == 2)
+        {
+            Assert.Contains("first (0 bytes): <absent>", output.Text);
+        }
+    }
+
+    [Theory]
+    [InlineData("{\"mode\":\"ranges\",\"limit\":0}")]
+    [InlineData("{\"mode\":\"ranges\",\"limit\":101}")]
+    [InlineData("{\"mode\":\"ranges\",\"offset\":-1}")]
+    [InlineData("{\"mode\":\"ranges\",\"length\":0}")]
+    [InlineData("{\"offset\":1}")]
+    public async Task RejectsInvalidRangeArguments(string arguments)
+    {
+        var json = "{\"path\":\"unused\",\"other\":\"unused\"," + arguments[1..];
+        var output = await new CompareTool().InvokeAsync(new ToolCall("1", "compare", json));
+        Assert.Equal(ToolResultStatus.Failure, output.Status);
+    }
+
+    [Fact]
     public async Task ReportsIdenticalFiles()
     {
         using var files = new TemporaryFiles();

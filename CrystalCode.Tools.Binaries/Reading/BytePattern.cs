@@ -8,11 +8,14 @@ namespace CrystalCode.Tools.Binaries.Reading;
 /// </summary>
 internal sealed class BytePattern
 {
-    private BytePattern(byte[] bytes, string description)
+    private BytePattern(byte[] bytes, string description, bool[]? wildcards = null)
     {
         Bytes = bytes;
         Description = description;
+        Wildcards = wildcards;
     }
+
+    public bool[]? Wildcards { get; }
 
     public byte[] Bytes { get; }
 
@@ -27,6 +30,35 @@ internal sealed class BytePattern
         value = null;
         error = null;
         byte[] bytes;
+        if (encoding == "hex-wildcard")
+        {
+            var tokens = pattern.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (tokens.Length == 0 || tokens.Length > BinaryLimits.MaximumPatternBytes)
+            {
+                error = $"A wildcard pattern must contain 1-{BinaryLimits.MaximumPatternBytes} space-separated bytes.";
+                return false;
+            }
+
+            bytes = new byte[tokens.Length];
+            var wildcards = new bool[tokens.Length];
+            for (var index = 0; index < tokens.Length; index++)
+            {
+                if (tokens[index] == "??")
+                {
+                    wildcards[index] = true;
+                }
+                else if (tokens[index].Length != 2
+                    || !byte.TryParse(tokens[index], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out bytes[index]))
+                {
+                    error = "A wildcard pattern must contain space-separated hex bytes or '??'.";
+                    return false;
+                }
+            }
+
+            value = new BytePattern(bytes, $"{bytes.Length}-byte {encoding} pattern", wildcards);
+            return true;
+        }
+
         switch (encoding)
         {
             case "hex":
@@ -50,7 +82,7 @@ internal sealed class BytePattern
                 bytes = Encoding.Unicode.GetBytes(pattern);
                 break;
             default:
-                error = "Argument 'encoding' must be hex, ascii, utf8, or utf16le.";
+                error = "Argument 'encoding' must be hex, hex-wildcard, ascii, utf8, or utf16le.";
                 return false;
         }
 
