@@ -96,7 +96,8 @@ public sealed class BinarySearchTool : ITool
                     ["path", "pattern", "encoding", "offset", "length", "limit", "context"],
                     out error)
                 || !BinaryArguments.TryReadRequiredString(root, "path", out var path, out error)
-                || !BinaryArguments.TryReadRequiredString(root, "pattern", out var patternText, out error)
+                || !BinaryArguments.TryReadRequiredString(
+                    root, "pattern", out var patternText, out error, preserveWhitespace: true)
                 || !BinaryArguments.TryReadOptionalChoice(
                     root,
                     "encoding",
@@ -182,12 +183,12 @@ public sealed class BinarySearchTool : ITool
                 return BinaryToolResult.Failure(PastEnd(path, size, offset));
             }
 
-            var windowEnd = length is null ? size : Math.Min(size, offset + length.Value);
+            var windowLength = length is null ? size - offset : Math.Min(length.Value, size - offset);
             stream.Seek(offset, SeekOrigin.Begin);
             var (hits, more) = await FindAsync(
                     stream,
                     offset,
-                    windowEnd - offset,
+                    windowLength,
                     pattern.Bytes,
                     limit,
                     cancellationToken)
@@ -315,9 +316,9 @@ public sealed class BinarySearchTool : ITool
             if (nextCarry > 0)
             {
                 span[(combinedLength - nextCarry)..].CopyTo(combined);
-                carryStart += combinedLength - nextCarry;
             }
 
+            carryStart += combinedLength - nextCarry;
             carryLength = nextCarry;
         }
 

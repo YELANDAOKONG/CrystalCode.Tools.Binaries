@@ -24,6 +24,7 @@ internal static class PrintableRuns
         var runs = new List<PrintableRun>();
         var buffer = new byte[BinaryLimits.BufferBytes];
         var current = new StringBuilder();
+        long currentLength = 0;
         var currentStart = windowStart;
         var more = false;
         var stopped = false;
@@ -36,8 +37,10 @@ internal static class PrintableRuns
             }
 
             var text = current.ToString();
+            var runLength = currentLength;
             current.Clear();
-            if (text.Length < minimumLength)
+            currentLength = 0;
+            if (runLength < minimumLength)
             {
                 return false;
             }
@@ -48,9 +51,20 @@ internal static class PrintableRuns
                 return true;
             }
 
-            var byteLength = utf16le ? (long)text.Length * 2 : text.Length;
+            var byteLength = utf16le ? runLength * 2 : runLength;
             runs.Add(new PrintableRun(currentStart, byteLength, text));
             return false;
+        }
+
+        void AppendCharacter(char value)
+        {
+            // Keep one extra character so the output can detect a truncated preview.
+            if (current.Length <= BinaryLimits.MaximumStringCharacters)
+            {
+                current.Append(value);
+            }
+
+            currentLength++;
         }
 
         long remaining = windowLength;
@@ -87,7 +101,7 @@ internal static class PrintableRuns
                             currentStart = nextUnitOffset;
                         }
 
-                        current.Append(code);
+                        AppendCharacter(code);
                     }
 
                     nextUnitOffset += 2;
@@ -109,7 +123,7 @@ internal static class PrintableRuns
                             currentStart = nextUnitOffset;
                         }
 
-                        current.Append(code);
+                        AppendCharacter(code);
                     }
 
                     nextUnitOffset += 2;
@@ -149,7 +163,7 @@ internal static class PrintableRuns
                             currentStart = chunkStart + index;
                         }
 
-                        current.Append((char)value);
+                        AppendCharacter((char)value);
                     }
                     else
                     {

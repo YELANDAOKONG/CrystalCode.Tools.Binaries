@@ -287,6 +287,55 @@ public sealed class BinarySearchToolTests
     }
 
     [Fact]
+    public async Task ReportsSingleByteOffsetsAcrossChunks()
+    {
+        using var files = new TemporaryFiles();
+        var bytes = new byte[131073];
+        bytes[65536] = 0xAA;
+        bytes[131072] = 0xAA;
+        var path = files.Write("chunks.bin", bytes);
+
+        var output = await new BinarySearchTool().InvokeAsync(
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "aa" })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Equal($"{path}: 131073 bytes\n2 matches for a 1-byte hex pattern\n"
+            + "offset 65536: aa\noffset 131072: aa", output.Text);
+    }
+
+    [Theory]
+    [InlineData("ascii", " hello ")]
+    [InlineData("utf8", "\t ")]
+    [InlineData("utf16le", "  ")]
+    public async Task PreservesLiteralPatternWhitespace(string encoding, string pattern)
+    {
+        using var files = new TemporaryFiles();
+        var encoder = encoding == "utf16le" ? Encoding.Unicode : Encoding.UTF8;
+        var path = files.Write("literal.bin", encoder.GetBytes("X" + pattern + "Y"));
+
+        var output = await new BinarySearchTool().InvokeAsync(
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern, encoding })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Contains($"1 match for a {encoder.GetByteCount(pattern)}-byte {encoding} pattern", output.Text);
+        Assert.Contains($"offset {encoder.GetByteCount("X")}: ", output.Text);
+    }
+
+    [Fact]
+    public async Task ClampsAnOversizedWindowWithoutOverflow()
+    {
+        using var files = new TemporaryFiles();
+        var path = files.Write("window.bin", [0, 0xAA]);
+
+        var output = await new BinarySearchTool().InvokeAsync(
+            new ToolCall("1", "binsearch",
+                JsonSerializer.Serialize(new { path, pattern = "aa", offset = 1, length = long.MaxValue })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Contains("offset 1: aa", output.Text);
+    }
+
+    [Fact]
     public async Task RejectsAnOddNumberOfHexDigits()
     {
         using var files = new TemporaryFiles();

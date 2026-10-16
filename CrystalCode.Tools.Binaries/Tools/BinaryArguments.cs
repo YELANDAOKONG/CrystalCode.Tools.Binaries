@@ -57,7 +57,8 @@ internal static class BinaryArguments
         JsonElement root,
         string name,
         out string value,
-        out string? error)
+        out string? error,
+        bool preserveWhitespace = false)
     {
         value = string.Empty;
         if (!root.TryGetProperty(name, out var element) || element.ValueKind != JsonValueKind.String)
@@ -66,7 +67,12 @@ internal static class BinaryArguments
             return false;
         }
 
-        var text = element.GetString()!.Trim();
+        var text = element.GetString()!;
+        if (!preserveWhitespace)
+        {
+            text = text.Trim();
+        }
+
         if (text.Length == 0)
         {
             error = $"Argument '{name}' must be a non-empty string.";

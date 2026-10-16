@@ -166,6 +166,26 @@ public sealed class StringsToolTests
         Assert.Equal(500, total);
     }
 
+    [Theory]
+    [InlineData("ascii")]
+    [InlineData("utf16le")]
+    public async Task TruncatesLongRunsAndPreservesPagination(string encoding)
+    {
+        using var files = new TemporaryFiles();
+        const int characterCount = 100_000;
+        var encoder = encoding == "utf16le" ? Encoding.Unicode : Encoding.ASCII;
+        var path = files.Write("long.bin", encoder.GetBytes(new string('A', characterCount) + "\0BBBB"));
+
+        var output = await new StringsTool().InvokeAsync(
+            new ToolCall("1", "strings",
+                JsonSerializer.Serialize(new { path, encoding, minimumLength = 4, limit = 1 })));
+
+        Assert.Equal(ToolResultStatus.Success, output.Status);
+        Assert.Contains("offset 0: " + new string('A', 200) + "...\n", output.Text);
+        Assert.EndsWith($"[showing 1 runs; continue with offset {encoder.GetByteCount(new string('A', characterCount))}]",
+            output.Text);
+    }
+
     [Fact]
     public async Task ReportsNoRuns()
     {
