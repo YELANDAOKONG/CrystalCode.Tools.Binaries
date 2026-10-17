@@ -16,7 +16,9 @@ public sealed class StringsToolTests
 
         Assert.Equal("strings", tool.Definition.Name);
         Assert.NotNull(tool.Definition.Description);
-        using var schema = JsonDocument.Parse(tool.Definition.InputSchema.GetRawText());
+        var input = Assert.IsType<JsonToolInput>(tool.Definition.Input);
+        Assert.Equal(ToolInputKind.Json, input.Kind);
+        using var schema = JsonDocument.Parse(input.Schema.GetRawText());
         Assert.False(schema.RootElement.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(
             "path",
@@ -29,13 +31,13 @@ public sealed class StringsToolTests
         using var files = new TemporaryFiles();
         var path = files.Write("utf8.bin", Encoding.UTF8.GetBytes("中文测试\0更多文本"));
         var output = await new StringsTool().InvokeAsync(new ToolCall("1", "strings",
-            JsonSerializer.Serialize(new { path, encoding = "utf8", minimumLength = 4, limit = 1 })));
+            JsonSerializer.Serialize(new { path, encoding = "utf8", minimumLength = 4, limit = 1 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains("offset 0: 中文测试", output.Text);
         Assert.EndsWith("[showing 1 runs; continue with offset 12]", output.Text);
         var next = await new StringsTool().InvokeAsync(new ToolCall("2", "strings",
-            JsonSerializer.Serialize(new { path, encoding = "utf8", minimumLength = 4, offset = 12 })));
+            JsonSerializer.Serialize(new { path, encoding = "utf8", minimumLength = 4, offset = 12 }), ToolInputKind.Json));
         Assert.Contains("offset 13: 更多文本", next.Text);
     }
 
@@ -45,7 +47,7 @@ public sealed class StringsToolTests
         using var files = new TemporaryFiles();
         var path = files.Write("utf8.bin", Encoding.UTF8.GetBytes(new string('A', 199) + "😀end"));
         var output = await new StringsTool().InvokeAsync(new ToolCall("1", "strings",
-            JsonSerializer.Serialize(new { path, encoding = "utf8" })));
+            JsonSerializer.Serialize(new { path, encoding = "utf8" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.EndsWith(new string('A', 199) + "...", output.Text);
@@ -64,7 +66,7 @@ public sealed class StringsToolTests
         var path = files.Write("runs.bin", [.. bytes]);
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -85,7 +87,7 @@ public sealed class StringsToolTests
             new ToolCall(
                 "1",
                 "strings",
-                JsonSerializer.Serialize(new { path, encoding = "utf16le", minimumLength = 4 })));
+                JsonSerializer.Serialize(new { path, encoding = "utf16le", minimumLength = 4 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -102,7 +104,7 @@ public sealed class StringsToolTests
         var path = files.WriteText("plain.txt", "plain text");
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -126,7 +128,7 @@ public sealed class StringsToolTests
         var path = files.Write("many.bin", [.. bytes]);
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, limit = 2 })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, limit = 2 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -152,7 +154,7 @@ public sealed class StringsToolTests
         var path = files.Write("long-runs.bin", [.. bytes]);
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, limit = 500 })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, limit = 500 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.True(output.Text.Length < 100_000, "The host truncates at 100,000 characters.");
@@ -179,7 +181,7 @@ public sealed class StringsToolTests
                 new ToolCall(
                     "1",
                     "strings",
-                    JsonSerializer.Serialize(new { path, limit = 500, offset })));
+                    JsonSerializer.Serialize(new { path, limit = 500, offset }), ToolInputKind.Json));
             Assert.Equal(ToolResultStatus.Success, page.Status);
             var pageLines = page.Text.Split('\n');
             total += pageLines.Count(line => line.StartsWith("offset ", StringComparison.Ordinal));
@@ -206,7 +208,7 @@ public sealed class StringsToolTests
 
         var output = await new StringsTool().InvokeAsync(
             new ToolCall("1", "strings",
-                JsonSerializer.Serialize(new { path, encoding, minimumLength = 4, limit = 1 })));
+                JsonSerializer.Serialize(new { path, encoding, minimumLength = 4, limit = 1 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains("offset 0: " + new string('A', 200) + "...\n", output.Text);
@@ -221,7 +223,7 @@ public sealed class StringsToolTests
         var path = files.Write("blank.bin", [0x00, 0x01, 0x02, 0x00, 0x03]);
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -238,7 +240,7 @@ public sealed class StringsToolTests
         var path = files.WriteText("window.bin", new string('A', 10) + new string('B', 10));
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, offset = 10 })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, offset = 10 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -255,7 +257,7 @@ public sealed class StringsToolTests
         var path = files.Write("empty.bin", []);
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal($"{path}: 0 bytes (empty file)", output.Text);
@@ -268,7 +270,7 @@ public sealed class StringsToolTests
         var path = files.WriteText("five.bin", "abcde");
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, offset = 6 })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, offset = 6 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal($"{path} has 5 bytes; offset 6 is past the end.", output.Text);
@@ -281,7 +283,7 @@ public sealed class StringsToolTests
         var path = files.WriteText("plain.txt", "plain text");
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, minimumLength = 2 })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, minimumLength = 2 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal("Argument 'minimumLength' must be an integer between 4 and 1024.", output.Text);
@@ -294,7 +296,7 @@ public sealed class StringsToolTests
         var path = files.WriteText("plain.txt", "plain text");
 
         var output = await new StringsTool().InvokeAsync(
-            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, encoding = "utf32" })));
+            new ToolCall("1", "strings", JsonSerializer.Serialize(new { path, encoding = "utf32" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal("Argument 'encoding' must be 'ascii', 'utf16le', or 'utf8'.", output.Text);

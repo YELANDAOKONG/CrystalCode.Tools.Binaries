@@ -35,7 +35,7 @@ public sealed class BinaryReadToolTests
 
             var path = files.Write("number.bin", bytes);
             var output = await new BinaryReadTool().InvokeAsync(new ToolCall("1", "binread",
-                JsonSerializer.Serialize(new { path, type, endianness })));
+                JsonSerializer.Serialize(new { path, type, endianness }), ToolInputKind.Json));
 
             Assert.Equal(ToolResultStatus.Success, output.Status);
             Assert.EndsWith($"offset 0: {Convert.ToHexStringLower(bytes)} = {expected}", output.Text);
@@ -52,7 +52,7 @@ public sealed class BinaryReadToolTests
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
             var output = await new BinaryReadTool().InvokeAsync(new ToolCall("1", "binread",
-                JsonSerializer.Serialize(new { path, type = "f32", offset = 1, count = 2 })));
+                JsonSerializer.Serialize(new { path, type = "f32", offset = 1, count = 2 }), ToolInputKind.Json));
             Assert.Equal(ToolResultStatus.Success, output.Status);
             Assert.Contains("offset 1: 0000c03f = 1.5", output.Text);
             Assert.Contains("offset 5: 00002040 = 2.5", output.Text);
@@ -74,7 +74,7 @@ public sealed class BinaryReadToolTests
     public async Task RejectsInvalidArguments(string arguments)
     {
         var json = arguments == "{}" ? "{\"path\":\"unused\"}" : "{\"path\":\"unused\"," + arguments[1..];
-        var output = await new BinaryReadTool().InvokeAsync(new ToolCall("1", "binread", json));
+        var output = await new BinaryReadTool().InvokeAsync(new ToolCall("1", "binread", json, ToolInputKind.Json));
         Assert.Equal(ToolResultStatus.Failure, output.Status);
     }
 
@@ -87,7 +87,7 @@ public sealed class BinaryReadToolTests
         using var files = new TemporaryFiles();
         var path = files.Write("short.bin", [1, 2]);
         var output = await new BinaryReadTool().InvokeAsync(new ToolCall("1", "binread",
-            JsonSerializer.Serialize(new { path, type = "u16", offset, count })));
+            JsonSerializer.Serialize(new { path, type = "u16", offset, count }), ToolInputKind.Json));
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.DoesNotContain("offset ", output.Text);
     }
@@ -98,7 +98,7 @@ public sealed class BinaryReadToolTests
         using var files = new TemporaryFiles();
         var path = files.Write("many.bin", new byte[8192]);
         var output = await new BinaryReadTool().InvokeAsync(new ToolCall("1", "binread",
-            JsonSerializer.Serialize(new { path, type = "u64", count = 1024 })));
+            JsonSerializer.Serialize(new { path, type = "u64", count = 1024 }), ToolInputKind.Json));
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(1024, output.Text.Split('\n').Count(line => line.StartsWith("offset ", StringComparison.Ordinal)));
         Assert.True(output.Text.Length < 90_000);
@@ -108,9 +108,11 @@ public sealed class BinaryReadToolTests
     public void ExposesDefinitionAndRequiredArguments()
     {
         var definition = new BinaryReadTool().Definition;
+        var input = Assert.IsType<JsonToolInput>(definition.Input);
         Assert.Equal("binread", definition.Name);
-        Assert.False(definition.InputSchema.GetProperty("additionalProperties").GetBoolean());
-        Assert.Equal(["path", "type"], definition.InputSchema.GetProperty("required").EnumerateArray()
+        Assert.Equal(ToolInputKind.Json, input.Kind);
+        Assert.False(input.Schema.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(["path", "type"], input.Schema.GetProperty("required").EnumerateArray()
             .Select(item => item.GetString()!).ToArray());
     }
 
@@ -120,6 +122,6 @@ public sealed class BinaryReadToolTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
-            await new BinaryReadTool().InvokeAsync(new ToolCall("1", "binread", "{}"), cancellation.Token));
+            await new BinaryReadTool().InvokeAsync(new ToolCall("1", "binread", "{}", ToolInputKind.Json), cancellation.Token));
     }
 }

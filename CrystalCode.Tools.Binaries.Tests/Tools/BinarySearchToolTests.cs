@@ -16,7 +16,9 @@ public sealed class BinarySearchToolTests
 
         Assert.Equal("binsearch", tool.Definition.Name);
         Assert.NotNull(tool.Definition.Description);
-        using var schema = JsonDocument.Parse(tool.Definition.InputSchema.GetRawText());
+        var input = Assert.IsType<JsonToolInput>(tool.Definition.Input);
+        Assert.Equal(ToolInputKind.Json, input.Kind);
+        using var schema = JsonDocument.Parse(input.Schema.GetRawText());
         Assert.False(schema.RootElement.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(
             ["path", "pattern"],
@@ -33,7 +35,7 @@ public sealed class BinarySearchToolTests
         bytes[65537] = 0x89;
         var path = files.Write("wildcard.bin", bytes);
         var output = await new BinarySearchTool().InvokeAsync(new ToolCall("1", "binsearch",
-            JsonSerializer.Serialize(new { path, pattern = "48 ?? 89", encoding = "hex-wildcard", context = 1 })));
+            JsonSerializer.Serialize(new { path, pattern = "48 ?? 89", encoding = "hex-wildcard", context = 1 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains("offset 65535: wildcard match\n  matched: 48 ab 89", output.Text);
@@ -47,13 +49,13 @@ public sealed class BinarySearchToolTests
         using var files = new TemporaryFiles();
         var path = files.Write("wildcard.bin", [1, 2, 3, 4, 5]);
         var output = await new BinarySearchTool().InvokeAsync(new ToolCall("1", "binsearch",
-            JsonSerializer.Serialize(new { path, pattern = "?? ??", encoding = "hex-wildcard", offset = 1, length = 3, limit = 1 })));
+            JsonSerializer.Serialize(new { path, pattern = "?? ??", encoding = "hex-wildcard", offset = 1, length = 3, limit = 1 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains("offset 1: wildcard match\n  matched: 02 03", output.Text);
         Assert.EndsWith("[showing 1 matches; continue with offset 2]", output.Text);
         var next = await new BinarySearchTool().InvokeAsync(new ToolCall("2", "binsearch",
-            JsonSerializer.Serialize(new { path, pattern = "?? ??", encoding = "hex-wildcard", offset = 2, length = 2 })));
+            JsonSerializer.Serialize(new { path, pattern = "?? ??", encoding = "hex-wildcard", offset = 2, length = 2 }), ToolInputKind.Json));
         Assert.Contains("1 match for", next.Text);
         Assert.Contains("matched: 03 04", next.Text);
     }
@@ -65,7 +67,7 @@ public sealed class BinarySearchToolTests
     public async Task RejectsInvalidWildcardPatterns(string pattern)
     {
         var output = await new BinarySearchTool().InvokeAsync(new ToolCall("1", "binsearch",
-            JsonSerializer.Serialize(new { path = "unused", pattern, encoding = "hex-wildcard" })));
+            JsonSerializer.Serialize(new { path = "unused", pattern, encoding = "hex-wildcard" }), ToolInputKind.Json));
         Assert.Equal(ToolResultStatus.Failure, output.Status);
     }
 
@@ -76,7 +78,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("magic.bin", [1, 2, 3, 0x89, 0x50, 0x4E, 0x47, 9]);
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "89 50 4e 47" })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "89 50 4e 47" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -93,7 +95,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("magic.bin", [1, 2, 3, 0x89, 0x50, 0x4E, 0x47, 9]);
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "89504E47" })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "89504E47" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains("offset 3: 89 50 4e 47", output.Text, StringComparison.Ordinal);
@@ -109,7 +111,7 @@ public sealed class BinarySearchToolTests
             new ToolCall(
                 "1",
                 "binsearch",
-                JsonSerializer.Serialize(new { path, pattern = "hello", encoding = "ascii" })));
+                JsonSerializer.Serialize(new { path, pattern = "hello", encoding = "ascii" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -130,7 +132,7 @@ public sealed class BinarySearchToolTests
             new ToolCall(
                 "1",
                 "binsearch",
-                JsonSerializer.Serialize(new { path, pattern = "AB", encoding = "utf16le" })));
+                JsonSerializer.Serialize(new { path, pattern = "AB", encoding = "utf16le" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -147,7 +149,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("overlap.bin", [0xAA, 0xAA, 0xAA]);
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "aa aa" })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "aa aa" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -165,7 +167,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("many.bin", [0xAA, 0xBB, 0xAA, 0xBB, 0xAA]);
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "aa", limit = 2 })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "aa", limit = 2 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -189,7 +191,7 @@ public sealed class BinarySearchToolTests
             new ToolCall(
                 "1",
                 "binsearch",
-                JsonSerializer.Serialize(new { path, pattern = "89 50 4e 47", context = 2 })));
+                JsonSerializer.Serialize(new { path, pattern = "89 50 4e 47", context = 2 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -213,7 +215,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("boundary.bin", bytes);
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "89 50 4e 47" })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "89 50 4e 47" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -236,7 +238,7 @@ public sealed class BinarySearchToolTests
             new ToolCall(
                 "1",
                 "binsearch",
-                JsonSerializer.Serialize(new { path, pattern = "aa", offset = 50 })));
+                JsonSerializer.Serialize(new { path, pattern = "aa", offset = 50 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -256,7 +258,7 @@ public sealed class BinarySearchToolTests
             new ToolCall(
                 "1",
                 "binsearch",
-                JsonSerializer.Serialize(new { path, pattern = "zz", encoding = "ascii" })));
+                JsonSerializer.Serialize(new { path, pattern = "zz", encoding = "ascii" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal("No matches.", output.Text);
@@ -269,7 +271,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("empty.bin", []);
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "aa" })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "aa" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal($"{path}: 0 bytes (empty file)", output.Text);
@@ -291,7 +293,7 @@ public sealed class BinarySearchToolTests
             new ToolCall(
                 "1",
                 "binsearch",
-                JsonSerializer.Serialize(new { path, pattern = "aa", limit = 1000, context = 64 })));
+                JsonSerializer.Serialize(new { path, pattern = "aa", limit = 1000, context = 64 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.True(output.Text.Length < 100_000, "The host truncates at 100,000 characters.");
@@ -317,7 +319,7 @@ public sealed class BinarySearchToolTests
                     "1",
                     "binsearch",
                     JsonSerializer.Serialize(
-                        new { path, pattern = "aa", limit = 1000, context = 64, offset })));
+                        new { path, pattern = "aa", limit = 1000, context = 64, offset }), ToolInputKind.Json));
             Assert.Equal(ToolResultStatus.Success, page.Status);
             var pageLines = page.Text.Split('\n');
             total += pageLines.Count(line => line.StartsWith("offset ", StringComparison.Ordinal));
@@ -342,7 +344,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("chunks.bin", bytes);
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "aa" })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "aa" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal($"{path}: 131073 bytes\n2 matches for a 1-byte hex pattern\n"
@@ -360,7 +362,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("literal.bin", encoder.GetBytes("X" + pattern + "Y"));
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern, encoding })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern, encoding }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains($"1 match for a {encoder.GetByteCount(pattern)}-byte {encoding} pattern", output.Text);
@@ -375,7 +377,7 @@ public sealed class BinarySearchToolTests
 
         var output = await new BinarySearchTool().InvokeAsync(
             new ToolCall("1", "binsearch",
-                JsonSerializer.Serialize(new { path, pattern = "aa", offset = 1, length = long.MaxValue })));
+                JsonSerializer.Serialize(new { path, pattern = "aa", offset = 1, length = long.MaxValue }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains("offset 1: aa", output.Text);
@@ -388,7 +390,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("magic.bin", [0x89]);
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "895" })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "895" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal("The hex pattern must contain an even number of hex digits.", output.Text);
@@ -401,7 +403,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("magic.bin", [0x89]);
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "89 5G" })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "89 5G" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal(
@@ -419,7 +421,7 @@ public sealed class BinarySearchToolTests
             new ToolCall(
                 "1",
                 "binsearch",
-                JsonSerializer.Serialize(new { path, pattern = "héllo", encoding = "ascii" })));
+                JsonSerializer.Serialize(new { path, pattern = "héllo", encoding = "ascii" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal(
@@ -435,7 +437,7 @@ public sealed class BinarySearchToolTests
         var path = files.Write("magic.bin", [0x89]);
 
         var output = await new BinarySearchTool().InvokeAsync(
-            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "89", length = 0 })));
+            new ToolCall("1", "binsearch", JsonSerializer.Serialize(new { path, pattern = "89", length = 0 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal("Argument 'length' must be a positive integer.", output.Text);
@@ -451,7 +453,7 @@ public sealed class BinarySearchToolTests
             new ToolCall(
                 "1",
                 "binsearch",
-                JsonSerializer.Serialize(new { path, pattern = "café", encoding = "utf8" })));
+                JsonSerializer.Serialize(new { path, pattern = "café", encoding = "utf8" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains("1 match for a 5-byte utf8 pattern", output.Text, StringComparison.Ordinal);

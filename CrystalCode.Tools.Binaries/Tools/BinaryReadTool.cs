@@ -103,7 +103,7 @@ public sealed class BinaryReadTool : ITool
               "additionalProperties": false
             }
             """);
-        return new ToolDefinition("binread", schema.RootElement.Clone(),
+        return ToolDefinition.Json("binread", schema.RootElement.Clone(),
             "Reads fixed-width integers or IEEE 754 floats at a byte offset with explicit endianness. "
             + "Returns original bytes and invariant numeric values; does not interpret file formats. "
             + "All requested values must fit in the file. Paths outside the workspace require approval.");

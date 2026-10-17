@@ -33,7 +33,9 @@ public sealed class HashToolTests
 
         Assert.Equal("hash", tool.Definition.Name);
         Assert.NotNull(tool.Definition.Description);
-        using var schema = JsonDocument.Parse(tool.Definition.InputSchema.GetRawText());
+        var input = Assert.IsType<JsonToolInput>(tool.Definition.Input);
+        Assert.Equal(ToolInputKind.Json, input.Kind);
+        using var schema = JsonDocument.Parse(input.Schema.GetRawText());
         Assert.False(schema.RootElement.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(
             "path",
@@ -47,7 +49,7 @@ public sealed class HashToolTests
         var path = files.WriteText("abc.txt", "abc");
 
         var output = await new HashTool().InvokeAsync(
-            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal($"{path}: 3 bytes\nsha256: {AbcSha256}", output.Text);
@@ -60,7 +62,7 @@ public sealed class HashToolTests
         var path = files.WriteText("abc.txt", "abc");
 
         var output = await new HashTool().InvokeAsync(
-            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "md5" })));
+            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "md5" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -75,7 +77,7 @@ public sealed class HashToolTests
         var path = files.WriteText("abc.txt", "abc");
 
         var output = await new HashTool().InvokeAsync(
-            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "sha384" })));
+            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "sha384" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal($"{path}: 3 bytes\nsha384: {AbcSha384}", output.Text);
@@ -88,7 +90,7 @@ public sealed class HashToolTests
         var path = files.WriteText("abc.txt", "abc");
 
         var output = await new HashTool().InvokeAsync(
-            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "sha3-256" })));
+            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "sha3-256" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal($"{path}: 3 bytes\nsha3-256: {AbcSha3_256}", output.Text);
@@ -101,7 +103,7 @@ public sealed class HashToolTests
         var path = files.WriteText("abc.txt", "abc");
 
         var output = await new HashTool().InvokeAsync(
-            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "sha3-384" })));
+            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "sha3-384" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal($"{path}: 3 bytes\nsha3-384: {AbcSha3_384}", output.Text);
@@ -114,7 +116,7 @@ public sealed class HashToolTests
         var path = files.WriteText("abc.txt", "abc");
 
         var output = await new HashTool().InvokeAsync(
-            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "sha3-512" })));
+            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "sha3-512" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal($"{path}: 3 bytes\nsha3-512: {AbcSha3_512}", output.Text);
@@ -130,7 +132,7 @@ public sealed class HashToolTests
             new ToolCall(
                 "1",
                 "hash",
-                JsonSerializer.Serialize(new { path, expected = AbcSha256.ToUpperInvariant() })));
+                JsonSerializer.Serialize(new { path, expected = AbcSha256.ToUpperInvariant() }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -151,7 +153,7 @@ public sealed class HashToolTests
             new ToolCall(
                 "1",
                 "hash",
-                JsonSerializer.Serialize(new { path, expected = new string('0', 64) })));
+                JsonSerializer.Serialize(new { path, expected = new string('0', 64) }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains($"expected: {new string('0', 64)}", output.Text, StringComparison.Ordinal);
@@ -165,7 +167,7 @@ public sealed class HashToolTests
         var path = files.Write("empty.bin", []);
 
         var output = await new HashTool().InvokeAsync(
-            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -181,7 +183,7 @@ public sealed class HashToolTests
         var path = Path.Combine(files.Root, "missing.bin");
 
         var output = await new HashTool().InvokeAsync(
-            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal($"The file was not found: {path}.", output.Text);
@@ -194,7 +196,7 @@ public sealed class HashToolTests
         var path = files.WriteText("abc.txt", "abc");
 
         var output = await new HashTool().InvokeAsync(
-            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "crc32" })));
+            new ToolCall("1", "hash", JsonSerializer.Serialize(new { path, algorithm = "crc32" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal(

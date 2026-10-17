@@ -428,6 +428,6 @@ public sealed class BinarySearchTool : ITool
     private static ToolDefinition CreateTool()
     {
         using var document = JsonDocument.Parse(Schema);
-        return new ToolDefinition(ToolName, document.RootElement.Clone(), ToolDescription);
+        return ToolDefinition.Json(ToolName, document.RootElement.Clone(), ToolDescription);
     }
 }

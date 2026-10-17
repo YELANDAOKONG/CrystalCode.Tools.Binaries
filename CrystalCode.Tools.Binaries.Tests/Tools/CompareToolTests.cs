@@ -15,7 +15,9 @@ public sealed class CompareToolTests
 
         Assert.Equal("compare", tool.Definition.Name);
         Assert.NotNull(tool.Definition.Description);
-        using var schema = JsonDocument.Parse(tool.Definition.InputSchema.GetRawText());
+        var input = Assert.IsType<JsonToolInput>(tool.Definition.Input);
+        Assert.Equal(ToolInputKind.Json, input.Kind);
+        using var schema = JsonDocument.Parse(input.Schema.GetRawText());
         Assert.False(schema.RootElement.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(
             ["path", "other"],
@@ -30,14 +32,14 @@ public sealed class CompareToolTests
         var other = files.Write("b.bin", [1, 9, 8, 4, 7, 6]);
         var tool = new CompareTool();
         var first = await tool.InvokeAsync(new ToolCall("1", "compare",
-            JsonSerializer.Serialize(new { path, other, mode = "ranges", limit = 1 })));
+            JsonSerializer.Serialize(new { path, other, mode = "ranges", limit = 1 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, first.Status);
         Assert.Contains("offset 1: 2 differing bytes\n  first (2 bytes): 0203\n  second (2 bytes): 0908", first.Text);
         Assert.EndsWith("[showing 1 ranges; continue with offset 3]", first.Text);
 
         var next = await tool.InvokeAsync(new ToolCall("2", "compare",
-            JsonSerializer.Serialize(new { path, other, mode = "ranges", offset = 3 })));
+            JsonSerializer.Serialize(new { path, other, mode = "ranges", offset = 3 }), ToolInputKind.Json));
         Assert.Contains("offset 4: 2 differing bytes\n  first (1 bytes): 05\n  second (2 bytes): 0706", next.Text);
         Assert.DoesNotContain("continue with", next.Text);
     }
@@ -51,7 +53,7 @@ public sealed class CompareToolTests
         Array.Fill(bytes, (byte)1, 65535, 65537);
         var other = files.Write("b.bin", bytes);
         var output = await new CompareTool().InvokeAsync(new ToolCall("1", "compare",
-            JsonSerializer.Serialize(new { path, other, mode = "ranges" })));
+            JsonSerializer.Serialize(new { path, other, mode = "ranges" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains("offset 65535: 65537 differing bytes", output.Text);
@@ -69,7 +71,7 @@ public sealed class CompareToolTests
         var path = files.Write("a.bin", [1, 2]);
         var other = files.Write("b.bin", [1, 3, 4, 5]);
         var output = await new CompareTool().InvokeAsync(new ToolCall("1", "compare",
-            JsonSerializer.Serialize(new { path, other, mode = "ranges", offset, length })));
+            JsonSerializer.Serialize(new { path, other, mode = "ranges", offset, length }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains(expected, output.Text);
@@ -88,7 +90,7 @@ public sealed class CompareToolTests
     public async Task RejectsInvalidRangeArguments(string arguments)
     {
         var json = "{\"path\":\"unused\",\"other\":\"unused\"," + arguments[1..];
-        var output = await new CompareTool().InvokeAsync(new ToolCall("1", "compare", json));
+        var output = await new CompareTool().InvokeAsync(new ToolCall("1", "compare", json, ToolInputKind.Json));
         Assert.Equal(ToolResultStatus.Failure, output.Status);
     }
 
@@ -100,7 +102,7 @@ public sealed class CompareToolTests
         var other = files.WriteText("b.bin", "same bytes");
 
         var output = await new CompareTool().InvokeAsync(
-            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other })));
+            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -118,7 +120,7 @@ public sealed class CompareToolTests
         var other = files.WriteText("b.bin", "hello worlD");
 
         var output = await new CompareTool().InvokeAsync(
-            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other })));
+            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -138,7 +140,7 @@ public sealed class CompareToolTests
         var other = files.WriteText("b.bin", "abcde");
 
         var output = await new CompareTool().InvokeAsync(
-            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other })));
+            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -158,7 +160,7 @@ public sealed class CompareToolTests
         var other = files.WriteText("b.bin", "abcde");
 
         var output = await new CompareTool().InvokeAsync(
-            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other })));
+            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -179,7 +181,7 @@ public sealed class CompareToolTests
         var other = files.Write("b.bin", []);
 
         var output = await new CompareTool().InvokeAsync(
-            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other })));
+            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -197,7 +199,7 @@ public sealed class CompareToolTests
         var other = files.WriteText("b.bin", "abc");
 
         var output = await new CompareTool().InvokeAsync(
-            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other })));
+            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -216,7 +218,7 @@ public sealed class CompareToolTests
         var other = Path.Combine(files.Root, "missing.bin");
 
         var output = await new CompareTool().InvokeAsync(
-            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other })));
+            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal($"The file was not found: {other}.", output.Text);
@@ -231,7 +233,7 @@ public sealed class CompareToolTests
         using var reader = new FileStream(other, FileMode.Open, FileAccess.Read, FileShare.None);
 
         var output = await new CompareTool().InvokeAsync(
-            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other })));
+            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal($"The file could not be read: {other}.", output.Text);
@@ -244,7 +246,7 @@ public sealed class CompareToolTests
         var path = files.WriteText("a.bin", "abc");
 
         var output = await new CompareTool().InvokeAsync(
-            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other = files.Root })));
+            new ToolCall("1", "compare", JsonSerializer.Serialize(new { path, other = files.Root }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal($"The path is a directory: {files.Root}.", output.Text);

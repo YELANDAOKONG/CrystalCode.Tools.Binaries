@@ -15,7 +15,9 @@ public sealed class HexDumpToolTests
 
         Assert.Equal("hexdump", tool.Definition.Name);
         Assert.NotNull(tool.Definition.Description);
-        using var schema = JsonDocument.Parse(tool.Definition.InputSchema.GetRawText());
+        var input = Assert.IsType<JsonToolInput>(tool.Definition.Input);
+        Assert.Equal(ToolInputKind.Json, input.Kind);
+        using var schema = JsonDocument.Parse(input.Schema.GetRawText());
         Assert.False(schema.RootElement.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(
             "path",
@@ -29,7 +31,7 @@ public sealed class HexDumpToolTests
         var path = files.WriteText("row.bin", "Hello World!1234");
 
         var output = await new HexDumpTool().InvokeAsync(
-            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal(
@@ -46,7 +48,7 @@ public sealed class HexDumpToolTests
         var path = files.Write("raw.bin", [0x00, 0x01, 0x41]);
 
         var output = await new HexDumpTool().InvokeAsync(
-            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains("00 01 41", output.Text, StringComparison.Ordinal);
@@ -63,7 +65,7 @@ public sealed class HexDumpToolTests
             new ToolCall(
                 "1",
                 "hexdump",
-                JsonSerializer.Serialize(new { path, offset = 2000, length = 100 })));
+                JsonSerializer.Serialize(new { path, offset = 2000, length = 100 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains($"{path}: 3000 bytes", output.Text, StringComparison.Ordinal);
@@ -81,7 +83,7 @@ public sealed class HexDumpToolTests
         var path = files.Write("empty.bin", []);
 
         var output = await new HexDumpTool().InvokeAsync(
-            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Equal($"{path}: 0 bytes (empty file)", output.Text);
@@ -94,7 +96,7 @@ public sealed class HexDumpToolTests
         var path = files.WriteText("ten.bin", "0123456789");
 
         var output = await new HexDumpTool().InvokeAsync(
-            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path, offset = 10 })));
+            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path, offset = 10 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal($"{path} has 10 bytes; offset 10 is past the end.", output.Text);
@@ -106,7 +108,7 @@ public sealed class HexDumpToolTests
         using var files = new TemporaryFiles();
 
         var output = await new HexDumpTool().InvokeAsync(
-            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path = files.Root })));
+            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path = files.Root }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal($"The path is a directory: {files.Root}.", output.Text);
@@ -119,7 +121,7 @@ public sealed class HexDumpToolTests
         var path = Path.Combine(files.Root, "missing.bin");
 
         var output = await new HexDumpTool().InvokeAsync(
-            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal($"The file was not found: {path}.", output.Text);
@@ -133,7 +135,7 @@ public sealed class HexDumpToolTests
         using var writer = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Read);
 
         var output = await new HexDumpTool().InvokeAsync(
-            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path })));
+            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Success, output.Status);
         Assert.Contains("|hello|", output.Text, StringComparison.Ordinal);
@@ -146,7 +148,7 @@ public sealed class HexDumpToolTests
         var path = files.WriteText("row.bin", "hi");
 
         var output = await new HexDumpTool().InvokeAsync(
-            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path, mode = "raw" })));
+            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path, mode = "raw" }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal("Tool arguments must contain only path, offset, and length.", output.Text);
@@ -159,7 +161,7 @@ public sealed class HexDumpToolTests
         var path = files.WriteText("row.bin", "hi");
 
         var output = await new HexDumpTool().InvokeAsync(
-            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path, length = 20000 })));
+            new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path, length = 20000 }), ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal("Argument 'length' must be an integer between 1 and 16384.", output.Text);
@@ -169,7 +171,7 @@ public sealed class HexDumpToolTests
     public async Task RejectsArgumentsThatAreNotJson()
     {
         var output = await new HexDumpTool().InvokeAsync(
-            new ToolCall("1", "hexdump", "not json"));
+            new ToolCall("1", "hexdump", "not json", ToolInputKind.Json));
 
         Assert.Equal(ToolResultStatus.Failure, output.Status);
         Assert.Equal("Tool arguments are not valid JSON.", output.Text);
@@ -185,7 +187,7 @@ public sealed class HexDumpToolTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await new HexDumpTool().InvokeAsync(
-                new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path })),
+                new ToolCall("1", "hexdump", JsonSerializer.Serialize(new { path }), ToolInputKind.Json),
                 cancellation.Token));
     }
 }
